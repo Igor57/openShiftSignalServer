@@ -6,12 +6,12 @@ var http = require('http');
 var file = new static.Server('./Pages');
 var app = http.createServer(function (req, res) {
 	file.serve(req, res);
-}).listen(1234);
+}).listen(process.env.OPENSHIFT_NODEJS_PORT ||1234);
 
 var io = require('socket.io').listen(app);
 
 
-var io2 = require('socket.io').listen(8080); 
+var io2 = require('socket.io').listen(process.env.OPENSHIFT_NODEJS_PORT ||8080); 
 
 io2.set('log level', 1);
 // Навешиваем обработчик на подключение нового клиента

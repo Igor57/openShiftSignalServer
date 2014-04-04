@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style type="text/css">
+    html { height: 100%; }
+    body { height: 100%; margin: 0; background: #111; text-align: center; }
+</style>
+
+</head>
+		<!--
+		<script src="client.js"></script>
+		-->
+		
+		<applet code="JsToJava.class" 
+        name="JsToJava" 
+        mayscript 
+        width="100%"
+        height=50>
+		</applet>
+
+
+<script src="/socket.io/socket.io.js"></script>
+
+
+<script>
+var PeerConnection = window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+var IceCandidate = window.mozRTCIceCandidate || window.RTCIceCandidate;
+var SessionDescription = window.mozRTCSessionDescription || window.RTCSessionDescription;
+navigator.getUserMedia = navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia;
+
+var pc; // PeerConnection
+
+            var screen_constraints = {
+                mandatory: {
+                       chromeMediaSource: 'screen',
+					    maxWidth: 1280,
+						maxHeight: 720,
+						minWidth: 1280,
+						minHeight: 720/*,
+						minFrameRate: 30,
+						maxFrameRate: 60*/
+                },
+                optional: []
+            };
+// Step 1. getUserMedia
+navigator.getUserMedia(
+  { audio: false, video: screen_constraints }, 
+  gotStream, 
+  function(error) { console.log(error) }
+);
+
+function gotStream(stream) {
+  pc = new PeerConnection(null);
+  pc.addStream(stream);
+  pc.onicecandidate = gotIceCandidate;
+}
+
+
+// Step 2. createOffer
+function createOffer() {
+  pc.createOffer(
+    gotLocalDescription, 
+    function(error) { console.log(error) }, 
+    { 'mandatory': { 'OfferToReceiveAudio': false, 'OfferToReceiveVideo': true } }
+  );
+}
+
+
+// Step 3. createAnswer
+function createAnswer() {
+  pc.createAnswer(
+    gotLocalDescription,
+    function(error) { console.log(error) }, 
+    { 'mandatory': { 'OfferToReceiveAudio': false, 'OfferToReceiveVideo': true } }
+  );
+}
+
+
+function gotLocalDescription(description){
+  pc.setLocalDescription(description);
+  sendMessage(description);
+}
+
+function gotIceCandidate(event){
+  if (event.candidate) {
+    sendMessage({
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate
+    });
+  }
+}
+
+
+
+////////////////////////////////////////////////
+// Socket.io
+
+var socket = io.connect('', {port: 1234});
+var socket2 = io.connect('', {port: 8080});
+//var socket2 = io.connect('http://192.168.1.35:8080');
+
+
+	socket2.on('connect', function () {
+		socket2.on('message', function (msg) {
+			// Добавим информацию в апплет
+			//alert('тест приема  '+ msg);
+			document.applets.JsToJava.updateField(msg);
+		});
+		
+	});
+	
+
+function sendMessage(message){
+  socket.emit('message', message);
+}
+
+socket.on('message', function (message){
+  if (message.type === 'offer') {
+    pc.setRemoteDescription(new SessionDescription(message));
+    createAnswer();
+  } 
+  else if (message.type === 'answer') {
+    pc.setRemoteDescription(new SessionDescription(message));
+  } 
+  else if (message.type === 'candidate') {
+    var candidate = new IceCandidate({sdpMLineIndex: message.label, candidate: message.candidate});
+    pc.addIceCandidate(candidate);
+  }
+  //alert('тест приема  '+ message);
+});
+
+</script>
+</html>

@@ -1,30 +1,42 @@
-#!/bin/env node
-//  OpenShift sample Node application
+var static = require('node-static');
+var fs = require('fs');
+
 var http = require('http');
+//var file = new(static.Server)();
+var file = new static.Server('./Pages');
+var app = http.createServer(function (req, res) {
+	file.serve(req, res);
+}).listen(1234);
 
-//Get the environment variables we need.
-var ipaddr  = process.env.OPENSHIFT_NODEJS_IP || "127.0.0.1";
-var port    = process.env.OPENSHIFT_NODEJS_PORT || 8080;
+var io = require('socket.io').listen(app);
 
-http.createServer(function (req, res) {
-	var addr = "unknown";
-	var out = "";
-	if (req.headers.hasOwnProperty('x-forwarded-for')) {
-		addr = req.headers['x-forwarded-for'];
-	} else if (req.headers.hasOwnProperty('remote-addr')){
-		addr = req.headers['remote-addr'];
-	}
 
-	if (req.headers.hasOwnProperty('accept')) {
-		if (req.headers['accept'].toLowerCase() == "application/json") {
-			  res.writeHead(200, {'Content-Type': 'application/json'});
-			  res.end(JSON.stringify({'ip': addr}, null, 4) + "\n");			
-			  return ;
-		}
-	}
+var io2 = require('socket.io').listen(8080); 
+
+io2.set('log level', 1);
+// Навешиваем обработчик на подключение нового клиента
+io2.sockets.on('connection', function (socket) {
+
+	// Навешиваем обработчик на входящее сообщение
+	socket.on('message', function (msg) {
+		// Отсылаем сообщение остальным участникам чата
+		socket.broadcast.json.send({'event': 'messageReceived', 'text': msg})
+	});
+	});
 	
-  res.writeHead(200, {'Content-Type': 'text/plain'});
-  res.write("Welcome to Node.js on OpenShift!\n\n");
-  res.end("Your IP address seems to be " + addr + "\n");
-}).listen(port, ipaddr);
-console.log("Server running at http://" + ipaddr + ":" + port + "/");
+
+io.sockets.on('connection', function (socket) {
+	function log() {
+		var array = [">>> "];
+		for(var i = 0; i < arguments.length; i++) {
+			array.push(arguments[i]);
+		}
+		socket.emit('log', array);
+	}
+
+	socket.on('message', function (message) {
+		log('Got message: ', message);
+		socket.broadcast.emit('message', message); // should be room only
+	});
+
+});
